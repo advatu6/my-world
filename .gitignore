@@ -3,3 +3,6 @@ users.json
 reports.json
 *.exe
 .env
+dms.json
+admins.txt
+olam-backup*.json

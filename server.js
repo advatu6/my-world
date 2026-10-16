@@ -43,47 +43,141 @@ const BYID = Object.fromEntries(CATALOG.map((i) => [i.id, i]));
 // ---- שמירת משתמשות בקובץ ----
 const USERS_FILE = path.join(__dirname, 'users.json');
 const REPORTS_FILE = path.join(__dirname, 'reports.json');
+const DMS_FILE = path.join(__dirname, 'dms.json');
+const ADMINS_FILE = path.join(__dirname, 'admins.txt');
 // אם מוגדר DATABASE_URL שומרים במסד נתונים חיצוני (Postgres); אחרת בקבצים, כמו עד עכשיו
 const DB_URL = process.env.DATABASE_URL;
 const pool = DB_URL ? new (require('pg').Pool)({ connectionString: DB_URL, max: 3 }) : null;
-const users = Object.create(null);
-const dirty = new Set(); // רק חשבונות ששונו נשמרים
-
-async function persist() {
-  if (!dirty.size) return;
-  const keys = [...dirty]; dirty.clear();
-  try {
-    if (pool) {
-      const obj = {}; for (const k of keys) if (users[k]) obj[k] = users[k];
-      await pool.query('INSERT INTO users(key, data) SELECT key, value FROM jsonb_each($1::jsonb) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data', [JSON.stringify(obj)]);
-    } else await fs.promises.writeFile(USERS_FILE, JSON.stringify(users));
-  } catch (e) { keys.forEach((k) => dirty.add(k)); throw e; }
-}
-
-async function loadUsers() {
-  let fileUsers = {};
-  try { fileUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch {}
-  if (!pool) return Object.assign(users, fileUsers);
-  await pool.query('CREATE TABLE IF NOT EXISTS users (key text PRIMARY KEY, data jsonb NOT NULL)');
-  await pool.query('CREATE TABLE IF NOT EXISTS reports (id serial PRIMARY KEY, created timestamptz DEFAULT now(), data jsonb NOT NULL)');
-  const r = await pool.query('SELECT key, data FROM users');
-  for (const row of r.rows) users[row.key] = row.data;
-  if (!r.rows.length && Object.keys(fileUsers).length) { // הפעלה ראשונה: מעבירות את החשבונות מהקובץ
-    Object.assign(users, fileUsers); Object.keys(fileUsers).forEach((k) => dirty.add(k)); await persist(); console.log('הועברו חשבונות מ-users.json למסד הנתונים');
+// חנות נתונים: כל רשומה נשמרת בנפרד, ורק מה ששונה נכתב
+function makeStore(table, file) {
+  const data = Object.create(null), dirty = new Set();
+  let timer = null;
+  async function persist() {
+    if (!dirty.size) return;
+    const keys = [...dirty]; dirty.clear();
+    try {
+      if (pool) {
+        const obj = {}; for (const k of keys) if (data[k]) obj[k] = data[k];
+        await pool.query('INSERT INTO ' + table + '(key, data) SELECT key, value FROM jsonb_each($1::jsonb) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data', [JSON.stringify(obj)]);
+      } else await fs.promises.writeFile(file, JSON.stringify(data));
+    } catch (e) { keys.forEach((k) => dirty.add(k)); throw e; }
   }
+  const save = (...keys) => {
+    if (!keys.length) Object.keys(data).forEach((k) => dirty.add(k)); else keys.forEach((k) => k && dirty.add(k));
+    if (timer) return;
+    timer = setTimeout(() => { timer = null; persist().catch((e) => console.error('שמירה נכשלה:', e.message)); }, 1500);
+  };
+  async function load() {
+    let fromFile = {}; try { fromFile = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+    if (!pool) return Object.assign(data, fromFile);
+    await pool.query('CREATE TABLE IF NOT EXISTS ' + table + ' (key text PRIMARY KEY, data jsonb NOT NULL)');
+    const r = await pool.query('SELECT key, data FROM ' + table);
+    for (const row of r.rows) data[row.key] = row.data;
+    if (!r.rows.length && Object.keys(fromFile).length) {
+      Object.assign(data, fromFile); Object.keys(fromFile).forEach((k) => dirty.add(k)); await persist();
+      console.log('הועברו נתונים מקובץ למסד הנתונים:', table);
+    }
+  }
+  return { data, persist, save, load };
+}
+const U = makeStore('users', USERS_FILE), D = makeStore('dms', DMS_FILE);
+const users = U.data, dms = D.data, saveUsers = U.save, saveDms = D.save;
+async function loadUsers() {
+  if (pool) await pool.query('CREATE TABLE IF NOT EXISTS reports (id serial PRIMARY KEY, created timestamptz DEFAULT now(), data jsonb NOT NULL)');
+  await U.load(); await D.load();
 }
 
-let saveTimer = null;
-const saveUsers = (...keys) => {
-  if (!keys.length) Object.keys(users).forEach((k) => dirty.add(k)); else keys.forEach((k) => k && dirty.add(k));
-  if (saveTimer) return;
-  saveTimer = setTimeout(() => { saveTimer = null; persist().catch((e) => console.error('שמירה נכשלה:', e.message)); }, 1500);
+// ---- דיווחים ----
+const readJson = (f, d) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
+const withIds = (list) => list.map((r, i) => (r.id ? r : { ...r, id: i + 1 }));
+const reportsAPI = {
+  async add(rec) {
+    if (pool) return (await pool.query('INSERT INTO reports(data) VALUES ($1::jsonb) RETURNING id', [JSON.stringify(rec)])).rows[0].id;
+    const list = withIds(readJson(REPORTS_FILE, []));
+    const id = list.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+    list.push({ ...rec, id }); fs.writeFileSync(REPORTS_FILE, JSON.stringify(list, null, 2)); return id;
+  },
+  async open() {
+    if (pool) {
+      const r = await pool.query("SELECT id, data FROM reports WHERE COALESCE((data->>'handled')::boolean, false) = false ORDER BY id DESC LIMIT 50");
+      return r.rows.map((x) => ({ ...x.data, id: x.id }));
+    }
+    return withIds(readJson(REPORTS_FILE, [])).filter((r) => !r.handled).reverse().slice(0, 50);
+  },
+  async handle(id) {
+    if (pool) return pool.query("UPDATE reports SET data = data || '{\"handled\": true}'::jsonb WHERE id = $1", [id]);
+    const list = withIds(readJson(REPORTS_FILE, [])), r = list.find((x) => x.id === id);
+    if (r) { r.handled = true; fs.writeFileSync(REPORTS_FILE, JSON.stringify(list, null, 2)); }
+  },
+  async all() {
+    if (pool) return (await pool.query('SELECT id, created, data FROM reports ORDER BY id')).rows;
+    return withIds(readJson(REPORTS_FILE, []));
+  },
 };
-const shutdown = async () => { try { await persist(); } catch {} process.exit(); };
+// מנהלות: משתנה סביבה ADMINS (שמות מופרדים בפסיק) או קובץ admins.txt (שם בכל שורה)
+const loadAdmins = () => new Set(String(process.env.ADMINS || '').split(',')
+  .concat(String(readTextSafe(ADMINS_FILE)).split(/\r?\n/)).map((x) => x.trim().toLowerCase()).filter(Boolean));
+function readTextSafe(f) { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } }
+
+const shutdown = async () => { try { await Promise.all([U.persist(), D.persist()]); } catch {} process.exit(); };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 const sha = (t) => crypto.createHash('sha256').update(t).digest('hex');
 const hashPw = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString('hex');
+
+// ---- סינון הודעות ----
+// רשימה בסיסית. אפשר להוסיף או להסיר מילים כאן. מילים בעייתיות מוסתרות בכוכביות
+const BAD_WORDS_HE = ['זונה', 'שרמוטה', 'בן זונה', 'בת זונה', 'כוס אמק', 'כוסאמק', 'חרא', 'מניאק', 'מזדיין', 'מזדיינת', 'תזדיין', 'לך תזדיין', 'זין', 'בן כלב', 'מפגר', 'מפגרת'];
+const BAD_WORDS_EN = ['fuck', 'fucking', 'shit', 'bitch', 'cunt', 'asshole', 'nigger', 'nigga', 'faggot', 'whore', 'slut', 'dick', 'pussy'];
+const escRe = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const wordBody = (w) => [...w].map((ch) => (ch === ' ' ? '[\\s._\\-*]+' : escRe(ch))).join('[\\s._\\-*]{0,2}');
+const BAD_RES = BAD_WORDS_HE.slice().sort((a, b) => b.length - a.length).map((w) => new RegExp('(?<![א-ת])[והבכלמש]?(?:' + wordBody(w) + ')(?![א-ת])', 'gu'))
+  .concat(BAD_WORDS_EN.map((w) => new RegExp('(?<![a-z])(?:' + wordBody(w) + ')(?![a-z])', 'gi')));
+const maskBad = (t) => BAD_RES.reduce((acc, re) => acc.replace(re, (m) => '*'.repeat(m.length)), t);
+const LINK_RE = /(https?:\/\/|www\.|[a-z0-9-]+\.(com|net|org|co|il|io|me|ly|xyz|info|biz|ru|tk|gg|app|dev)\b)/i;
+const PHONE_RE = /\d[\d\s\-.]{6,}\d/;
+// מחזירה { text } או { error } (error ריק = להתעלם בשקט)
+function filterText(raw, max, st) {
+  let t = String(raw || '').replace(/[\u0591-\u05C7\u200B-\u200F\u202A-\u202E\u2060\uFEFF\u0000-\u001F]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
+  if (!t) return { error: '' };
+  t = t.replace(/(.)\1{4,}/gu, '$1$1$1');
+  if (LINK_RE.test(t) || PHONE_RE.test(t)) return { error: 'לא ניתן לשלוח קישורים או מספרי טלפון' };
+  t = maskBad(t);
+  if (st) {
+    if (st.lastText === t && Date.now() - st.lastAt < 15000) return { error: 'כבר כתבת את זה' };
+    st.lastText = t; st.lastAt = Date.now();
+  }
+  return { text: t };
+}
+
+// ---- שמות שמורים ----
+const RESERVED = ['admin', 'administrator', 'moderator', 'staff', 'support', 'system', 'owner', 'manager', 'olam', 'מנהל', 'מנהלת', 'מנהלים', 'אדמין', 'מודרטור', 'תמיכה', 'מערכת', 'בעלים', 'בעלת', 'העולם', 'עולם', 'צוות'];
+const LEET = { 0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', '@': 'a', $: 's' };
+const reservedName = (n) => {
+  const low = [...String(n).toLowerCase()];
+  const flats = [low.map((c) => LEET[c] || c).join(''), low.join('')].map((x) => x.replace(/[^a-z\u05d0-\u05ea]/g, ''));
+  return flats.some((flat) => RESERVED.some((r) => flat === r || (r.length >= 5 && flat.includes(r))));
+};
+
+// ---- קוד שחזור סיסמה ----
+const newCode = () => {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = '';
+  for (let i = 0; i < 12; i++) c += A[crypto.randomInt(A.length)];
+  return c.match(/.{4}/g).join('-');
+};
+const normCode = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const setRecovery = (u) => {
+  const code = newCode();
+  u.recSalt = crypto.randomBytes(16).toString('hex'); u.recHash = hashPw(normCode(code), u.recSalt);
+  return code;
+};
+
+// ---- הודעות פרטיות ----
+const pairKey = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+const dmUnread = (u, myKey, fk) => {
+  const read = (u.dmRead || {})[fk] || 0;
+  return (dms[pairKey(myKey, fk)] || []).filter((m) => m.f === fk && m.ts > read).length;
+};
 
 // ---- הגבלת קצב לפי כתובת רשת ----
 const buckets = new Map();
@@ -160,12 +254,13 @@ const sayTo = (room, sender, event, payload) => {
 
 // ---- חברות ----
 const nameOf = (k) => (users[k] ? users[k].name : k);
-const friendsPayload = (u) => ({
+const friendsPayload = (u, myKey) => ({
   requests: u.requests.map((k) => ({ key: k, name: nameOf(k) })),
   friends: u.friends.map((k) => {
     const sid = sockByKey[k], p = sid && players[sid];
     return { key: k, name: nameOf(k), online: !!p, room: p ? kindOf(p.room) : null,
-      server: p ? Number(String(p.room).split(':')[1] || 0) + 1 : null };
+      server: p ? Number(String(p.room).split(':')[1] || 0) + 1 : null,
+      unread: dmUnread(u, myKey, k) };
   }),
 });
 const pushFriendsFor = (key) => {
@@ -174,7 +269,7 @@ const pushFriendsFor = (key) => {
     if (!k || seen.has(k)) return;
     seen.add(k);
     const sid = sockByKey[k], u = users[k];
-    if (sid && u) io.to(sid).emit('friends', friendsPayload(u));
+    if (sid && u) io.to(sid).emit('friends', friendsPayload(u, k));
   };
   send(key);
   const u = users[key];
@@ -221,7 +316,7 @@ io.on('connection', (socket) => {
   const reported = new Set();
   const ip = ipOf(socket);
 
-  socket.on('auth', ({ mode, username, password, color, remember, token }) => {
+  socket.on('auth', ({ mode, username, password, color, remember, token, agreed }) => {
     if (started) return;
     if (hits('fail:' + ip, 600000) >= 20) return socket.emit('authError', 'יותר מדי ניסיונות. נסי שוב בעוד כמה דקות');
     username = String(username || '').trim();
@@ -230,18 +325,22 @@ io.on('connection', (socket) => {
     const fail = (m) => { record('fail:' + ip, 600000); socket.emit('authError', m); if (++fails >= 8) socket.disconnect(); };
     if (username.length < 2 || username.length > 16) return fail('השם חייב להיות באורך 2 עד 16 תווים');
     if (mode !== 'token' && (password.length < 4 || password.length > 100)) return fail('הסיסמה חייבת להכיל לפחות 4 תווים');
-    let user;
+    let user, newRecovery = null;
     if (mode === 'register') {
       if (users[key]) return fail('השם כבר תפוס');
       if (hits('reg:' + ip, 3600000) >= 5) return fail('נרשמו יותר מדי חשבונות מהכתובת הזו. נסי שוב מאוחר יותר');
       record('reg:' + ip, 3600000);
+      if (agreed !== true) return fail('צריך לאשר שאת בת 18 ומעלה ומסכימה לתנאי השימוש');
+      if (!loadAdmins().has(key) && reservedName(username)) return fail('השם הזה שמור, נא לבחור שם אחר');
+      if (maskBad(username) !== username) return fail('השם לא מתאים, נא לבחור שם אחר');
       const salt = crypto.randomBytes(16).toString('hex');
       user = users[key] = {
         name: username, salt, hash: hashPw(password, salt),
         color: /^#[0-9a-f]{6}$/i.test(color) ? color : '#e07a5f',
-        coins: START_COINS, owned: [], blocked: [], friends: [], requests: [],
+        coins: START_COINS, owned: [], blocked: [], friends: [], requests: [], dmRead: {}, terms: { at: Date.now(), v: 1 },
         wear: { top: null, hat: null, pants: null, shoes: null, glasses: null },
       };
+      newRecovery = setRecovery(user);
       saveUsers(key);
     } else if (mode === 'token') {
       user = users[key];
@@ -253,6 +352,7 @@ io.on('connection', (socket) => {
       if (!ok) return fail('שם או סיסמה לא נכונים');
     }
     for (const f of ['blocked', 'friends', 'requests', 'tokens']) if (!user[f]) user[f] = [];
+    if (user.banned) return fail('החשבון הושעה');
     if (online.has(key)) return fail('המשתמשת הזו כבר מחוברת');
     if (online.size >= MAX_ONLINE) return fail('העולם מלא כרגע. נסי בעוד כמה דקות');
     started = true; online.add(key); socket.data.key = key; sockByKey[key] = socket.id;
@@ -268,7 +368,10 @@ io.on('connection', (socket) => {
       x: 400, y: 300, tx: 400, ty: 300, wear: user.wear,
     };
     socket.join(inst);
-    socket.emit('init', { me: socket.id, room: 'square', inst, players: roomPlayers(inst), catalog: CATALOG, emotes: EMOTES });
+    socket.emit('init', { me: socket.id, room: 'square', inst, players: roomPlayers(inst), catalog: CATALOG, emotes: EMOTES,
+      needTerms: !user.terms, hasRecovery: !!user.recHash, admin: loadAdmins().has(key) });
+    if (newRecovery) socket.emit('recoveryCode', { code: newRecovery, first: true });
+    if (loadAdmins().has(key)) reportsAPI.open().then((l) => socket.emit('adminAlert', { count: l.length })).catch(() => {});
     sendMe(socket.id);
     socket.to(inst).emit('joined', pub(p));
     emitCounts();
@@ -331,8 +434,9 @@ io.on('connection', (socket) => {
     const now = Date.now();
     if (!p || now - lastChat < 700) return;
     lastChat = now;
-    text = String(text || '').trim().slice(0, 100);
-    if (!text) return;
+    const r = filterText(text, 100, socket.data);
+    if (r.error !== undefined) { if (r.error) socket.emit('notice', r.error); return; }
+    text = r.text;
     recentChat.push({ user: p.name, text }); if (recentChat.length > 200) recentChat.shift();
     sayTo(p.room, p, 'chat', { id: p.id, text });
   });
@@ -361,11 +465,85 @@ io.on('connection', (socket) => {
     reported.add(tid);
     const rec = { time: new Date().toISOString(), reporter: p.name, reported: t.name,
       recent: recentChat.filter((m) => m.user === t.name).slice(-5) };
-    if (pool) pool.query('INSERT INTO reports(data) VALUES ($1::jsonb)', [JSON.stringify(rec)]).catch((e) => console.error(e.message));
-    else {
-      let list = []; try { list = JSON.parse(fs.readFileSync(REPORTS_FILE, 'utf8')); } catch {}
-      list.push(rec);
-      fs.writeFile(REPORTS_FILE, JSON.stringify(list, null, 2), () => {});
+    reportsAPI.add(rec).then(() => reportsAPI.open()).then((open) => {
+      for (const k of loadAdmins()) if (sockByKey[k]) io.to(sockByKey[k]).emit('adminAlert', { count: open.length, text: p.name + ' דיווחה על ' + t.name });
+    }).catch((e) => console.error('דיווח נכשל:', e.message));
+  });
+
+  // ---- ניהול (רק למנהלות) ----
+  const isAdmin = () => loadAdmins().has(socket.data.key);
+  const sendReports = async () => {
+    const list = await reportsAPI.open();
+    socket.emit('adminReports', list.map((r) => ({ ...r, banned: !!(users[String(r.reported).toLowerCase()] || {}).banned })));
+    socket.emit('adminAlert', { count: list.length });
+  };
+  socket.on('adminReports', () => { if (isAdmin()) sendReports().catch(() => {}); });
+  socket.on('adminHandle', (id) => { if (isAdmin()) reportsAPI.handle(Number(id)).then(sendReports).catch(() => {}); });
+  socket.on('adminBan', ({ name, on } = {}) => {
+    if (!isAdmin()) return;
+    const k = String(name || '').toLowerCase(), u = users[k];
+    if (!u || loadAdmins().has(k)) return;
+    u.banned = !!on; saveUsers(k);
+    if (on && sockByKey[k]) { const so = io.sockets.sockets.get(sockByKey[k]); if (so) so.disconnect(true); }
+    sendReports().catch(() => {});
+  });
+  socket.on('adminBackup', async () => {
+    if (!isAdmin()) return;
+    try { socket.emit('backup', JSON.stringify({ exported: new Date().toISOString(), users, dms, reports: await reportsAPI.all() })); }
+    catch (e) { socket.emit('notice', 'הגיבוי נכשל: ' + e.message); }
+  });
+
+  // ---- תנאי שימוש, קוד שחזור, איפוס סיסמה ----
+  socket.on('acceptTerms', () => {
+    const w = wallets[socket.id]; if (!w) return;
+    w.terms = { at: Date.now(), v: 1 }; saveUsers(socket.data.key);
+  });
+  socket.on('newRecovery', () => {
+    const w = wallets[socket.id]; if (!w) return;
+    const code = setRecovery(w); saveUsers(socket.data.key);
+    socket.emit('recoveryCode', { code, first: false });
+  });
+  socket.on('resetPw', ({ username, code, password } = {}) => {
+    if (started) return;
+    const bad = (m) => { record('fail:' + ip, 600000); socket.emit('authError', m); };
+    if (hits('fail:' + ip, 600000) >= 20) return socket.emit('authError', 'יותר מדי ניסיונות. נסי שוב בעוד כמה דקות');
+    const k = String(username || '').trim().toLowerCase(), u = users[k], pw = String(password || '');
+    if (pw.length < 4 || pw.length > 100) return bad('הסיסמה החדשה חייבת להכיל לפחות 4 תווים');
+    const ok = u && u.recHash && crypto.timingSafeEqual(Buffer.from(hashPw(normCode(code), u.recSalt), 'hex'), Buffer.from(u.recHash, 'hex'));
+    if (!ok) return bad('השם או קוד השחזור לא נכונים');
+    u.salt = crypto.randomBytes(16).toString('hex'); u.hash = hashPw(pw, u.salt); u.tokens = [];
+    const fresh = setRecovery(u); saveUsers(k);
+    socket.emit('resetOk', { code: fresh });
+  });
+
+  // ---- הודעות פרטיות (נשמרות, עד 100 אחרונות בכל שיחה) ----
+  socket.on('dmOpen', (fk) => {
+    const me = wallets[socket.id], k = String(fk || '').toLowerCase(), mk = socket.data.key;
+    if (!me || !me.friends.includes(k)) return;
+    socket.data.dmView = k;
+    me.dmRead = me.dmRead || {}; me.dmRead[k] = Date.now(); saveUsers(mk);
+    socket.emit('dmHistory', { key: k, msgs: (dms[pairKey(mk, k)] || []).map((m) => ({ me: m.f === mk, text: m.t, ts: m.ts })) });
+    pushFriendsFor(mk);
+  });
+  socket.on('dmClose', () => { socket.data.dmView = null; });
+  let lastDm = 0;
+  socket.on('dmSend', ({ to, text } = {}) => {
+    const me = wallets[socket.id], mk = socket.data.key, k = String(to || '').toLowerCase(), other = users[k];
+    if (!me || !other || !me.friends.includes(k)) return;
+    const now = Date.now(); if (now - lastDm < 800) return; lastDm = now;
+    if (other.blocked.includes(mk)) return socket.emit('notice', 'לא ניתן לשלוח הודעה לחברה הזו');
+    const r = filterText(text, 300, socket.data);
+    if (r.error !== undefined) { if (r.error) socket.emit('notice', r.error); return; }
+    const pk = pairKey(mk, k), list = dms[pk] || (dms[pk] = []);
+    list.push({ f: mk, t: r.text, ts: now }); if (list.length > 100) list.shift();
+    saveDms(pk);
+    socket.emit('dm', { key: k, me: true, text: r.text, ts: now });
+    const sid = sockByKey[k];
+    if (sid) {
+      const so = io.sockets.sockets.get(sid), viewing = so && so.data.dmView === mk;
+      if (viewing) { other.dmRead = other.dmRead || {}; other.dmRead[mk] = now; saveUsers(k); }
+      io.to(sid).emit('dm', { key: mk, me: false, text: r.text, ts: now });
+      if (!viewing) pushFriendsFor(k);
     }
   });
 

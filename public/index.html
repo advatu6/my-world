@@ -23,7 +23,7 @@
   #bar { display:flex; gap:8px; padding:8px; background:var(--card); align-items:center; }
   #bar input { flex:1; min-width:0; padding:12px; border-radius:10px; border:0; font-size:16px; }
   #coins { font-weight:700; white-space:nowrap; }
-  #shop, #mapPanel, #friendsPanel { display:none; position:absolute; inset:0; background:rgba(10,15,30,.85); padding:14px; overflow:auto; }
+  #shop, #mapPanel, #friendsPanel, #adminPanel, #dmPanel { display:none; position:absolute; inset:0; background:rgba(10,15,30,.85); padding:14px; overflow:auto; }
   .box { background:var(--card); border-radius:16px; padding:16px; max-width:460px; margin:0 auto; }
   #shopHead { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
   .roomBtn { width:100%; display:flex; justify-content:space-between; align-items:center; padding:16px; font-size:17px; }
@@ -62,6 +62,20 @@
   .acct .hd { position:absolute; top:0; left:7px; width:20px; height:20px; border-radius:50%; background:#f1d3b3; }
   .acct .bd { position:absolute; top:19px; left:3px; width:28px; height:26px; border-radius:10px; }
   .acct button { padding:6px 10px; font-size:13px; }
+  .modal { display:none; position:fixed; inset:0; background:rgba(10,15,30,.92); z-index:20; padding:16px; overflow:auto; }
+  .modal input[type=text], .modal input[type=password] { width:100%; margin-bottom:10px; }
+  .terms { font-size:14px; line-height:1.7; max-height:55vh; overflow:auto; padding:0 4px; }
+  .terms li { margin-bottom:6px; }
+  #codeVal { font-size:26px; font-weight:800; letter-spacing:2px; text-align:center; background:#1f2a44; border-radius:12px; padding:14px; margin:12px 0; direction:ltr; user-select:all; }
+  #dmList { display:flex; flex-direction:column; gap:6px; height:48vh; overflow:auto; padding:6px 2px; }
+  .dm { max-width:82%; padding:8px 12px; border-radius:14px; word-break:break-word; }
+  .dm.me { background:var(--accent); color:#222; align-self:flex-start; }
+  .dm.them { background:#44557d; align-self:flex-end; }
+  #dmForm { display:flex; gap:8px; margin-top:10px; }
+  #dmForm input { flex:1; min-width:0; padding:12px; border-radius:10px; border:0; font-size:16px; }
+  .rep { background:#1f2a44; border-radius:12px; padding:10px 12px; margin-bottom:10px; font-size:14px; }
+  .rep .msgs { opacity:.85; margin:6px 0; }
+  .rep .acts { display:flex; gap:8px; }
 </style>
 </head>
 <body>
@@ -78,12 +92,51 @@
     <input type="password" id="pass" placeholder="סיסמה" minlength="4" required>
     <label>צבע הדמות (להרשמה) <input type="color" id="color" value="#e07a5f"></label>
     <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="remember"> זה המחשב שלי, זכרי אותי</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="agree"> אני בת 18 ומעלה ומסכימה ל<a href="#" id="termsLink" style="color:var(--accent)">תנאי השימוש</a> (להרשמה)</label>
     <div id="authErr" style="color:#ff9b9b;min-height:1.3em"></div>
     <button>כניסה</button>
     <button type="button" id="regBtn" class="alt">הרשמה חדשה</button>
+    <button type="button" id="forgotBtn" class="alt">שכחתי סיסמה</button>
     <button type="button" id="backBtn" class="alt" style="display:none">חזרה לדמויות שלי</button>
   </form>
 </div>
+<div id="termsPanel" class="modal"><div class="box">
+  <h2 style="margin:0 0 10px">תנאי שימוש ופרטיות</h2>
+  <ol class="terms">
+    <li>העולם מיועד לבנות 18 ומעלה בלבד.</li>
+    <li>אסור: הטרדה ואיומים, גזענות ושנאה, תוכן מיני מפורש או כזה שמערב קטינים, התחזות לאחרות או לצוות, חשיפת פרטים אישיים של אחרות, ספאם ופרסומות, קישורים ומספרי טלפון.</li>
+    <li>ההודעות מסוננות אוטומטית, ומילים בעייתיות מוסתרות בכוכביות.</li>
+    <li>אפשר לדווח על כל דמות. מנהלות העולם עשויות לקרוא את הדיווח ואת עד 5 ההודעות האחרונות של הדמות המדווחת, ולהשעות חשבונות שמפרים את הכללים, גם בלי התראה מראש.</li>
+    <li>מה נשמר: שם משתמשת, סיסמה מוצפנת (לא ניתן לראות אותה), צבע, פריטים ומטבעות, רשימות חברות וחסימות, והודעות פרטיות בין חברות (עד 100 האחרונות בכל שיחה). הודעות בכיכר, ביער ובחוף אינן נשמרות. גיבויי המערכת כוללים את כל המידע הזה.</li>
+    <li>אנחנו לא אוספות אימייל. שחזור סיסמה נעשה בעזרת קוד שחזור שמוצג פעם אחת. אם הקוד אבד והסיסמה נשכחה, אי אפשר לשחזר את החשבון.</li>
+    <li>העולם ניתן כמו שהוא, בלי התחייבות. ייתכנו תקלות, איפוסים ואובדן נתונים. המטבעות והפריטים וירטואליים בלבד וללא ערך כספי.</li>
+    <li>למחיקת חשבון או לשאלות: [כתבי כאן כתובת ליצירת קשר].</li>
+    <li>ייתכנו שינויים בתנאים, ונבקש את אישורך מחדש.</li>
+  </ol>
+  <button type="button" id="termsAccept" class="alt" style="display:none;width:100%;margin-bottom:8px;background:var(--accent);color:#222">אני מאשרת</button>
+  <button type="button" id="termsDecline" class="alt" style="display:none;width:100%">לא מסכימה</button>
+  <button type="button" id="termsClose" class="alt" style="width:100%">סגירה</button>
+</div></div>
+<div id="resetPanel" class="modal"><div class="box">
+  <h2 style="margin:0 0 10px">שחזור סיסמה</h2>
+  <p style="font-size:14px;opacity:.85">הכניסי את שם המשתמשת, את קוד השחזור שקיבלת בהרשמה, וסיסמה חדשה.</p>
+  <form id="resetForm">
+    <input type="text" id="resetName" placeholder="שם משתמשת" required>
+    <input type="text" id="resetCode" placeholder="קוד שחזור (XXXX-XXXX-XXXX)" required autocomplete="off" style="direction:ltr">
+    <input type="password" id="resetPass" placeholder="סיסמה חדשה" minlength="4" required>
+    <div id="resetErr" style="color:#ff9b9b;min-height:1.3em;margin-bottom:8px"></div>
+    <button style="width:100%;margin-bottom:8px">שינוי סיסמה</button>
+    <button type="button" id="resetClose" class="alt" style="width:100%">סגירה</button>
+  </form>
+</div></div>
+<div id="codePanel" class="modal"><div class="box">
+  <h2 style="margin:0 0 6px">קוד שחזור 🔑</h2>
+  <p id="codeMsg" style="font-size:14px"></p>
+  <div id="codeVal"></div>
+  <p style="font-size:13px;opacity:.8">צלמי מסך או רשמי אותו במקום בטוח. הקוד מאפשר לאפס את הסיסמה אם תשכחי אותה.</p>
+  <button type="button" id="codeCopy" class="alt" style="width:100%;margin-bottom:8px">העתקה</button>
+  <button type="button" id="codeClose" style="width:100%">שמרתי</button>
+</div></div>
 <div id="game">
   <canvas id="cv" width="800" height="500"></canvas>
   <form id="bar">
@@ -91,6 +144,7 @@
     <button type="button" id="mapBtn" class="alt" title="מפה">🗺️</button>
     <button type="button" id="friendsBtn" class="alt" title="חברות">👥</button>
     <button type="button" id="emoBtn" class="alt" title="רגשונים">😀</button>
+    <button type="button" id="adminBtn" class="alt" title="ניהול" style="display:none">🛡️</button>
     <span id="coins">🪙 0</span>
     <input id="msg" maxlength="100" placeholder="כתבי הודעה…" autocomplete="off">
     <button>שליחה</button>
@@ -99,7 +153,22 @@
   <div id="friendsPanel"><div class="box">
     <div id="shopHead"><b>חברות</b><button type="button" id="friendsClose" class="alt">סגירה</button></div>
     <div id="friendsList"></div>
+    <button type="button" id="recBtn" class="alt" style="width:100%;margin-top:16px">צרי קוד שחזור חדש לסיסמה</button>
+    <button type="button" id="termsBtn" class="alt" style="width:100%;margin-top:8px">תנאי שימוש</button>
     <button type="button" id="logoutBtn" class="alt" style="width:100%;margin-top:16px">התנתקות</button>
+  </div></div>
+  <div id="dmPanel"><div class="box">
+    <div id="shopHead"><b id="dmName"></b><button type="button" id="dmBack" class="alt">חזרה</button></div>
+    <div id="dmList"></div>
+    <form id="dmForm"><input id="dmInput" maxlength="300" placeholder="הודעה פרטית…" autocomplete="off"><button>שליחה</button></form>
+  </div></div>
+  <div id="adminPanel"><div class="box">
+    <div id="shopHead"><b>ניהול</b><button type="button" id="adminClose" class="alt">סגירה</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button type="button" id="adminRefresh" class="alt" style="flex:1">רענון</button>
+      <button type="button" id="adminBackup" class="alt" style="flex:1">הורדת גיבוי</button>
+    </div>
+    <div id="adminList"></div>
   </div></div>
   <div id="emotes"></div>
   <div id="pmenu"><b id="pname"></b><div id="pmsg"></div>
@@ -122,6 +191,7 @@ const $ = (id) => document.getElementById(id);
 const socket = io();
 const cv = $('cv'), ctx = cv.getContext('2d');
 let myId = null, catalog = [], mine = { coins: 0, owned: [] };
+let dmWith = null;
 let room = 'square', inst = null, coins = [], counts = { world: 0, rooms: {} };
 const pendingAt = new Map();
 const crabs = new Map(), pops = [];
@@ -130,7 +200,7 @@ const ROOM_INFO = { square: '🏙️ כיכר', forest: '🌲 יער', beach: '�
 let EMOTES = [], menuId = null;
 
 const auth = (mode) => socket.emit('auth', { mode, username: $('name').value.trim(), password: $('pass').value,
-  color: $('color').value, remember: $('remember').checked });
+  color: $('color').value, remember: $('remember').checked, agreed: $('agree').checked });
 
 // ---- דמויות שמורות במחשב הזה ----
 const ACC_KEY = 'olamAccounts';
@@ -182,12 +252,16 @@ socket.on('tokenBad', () => {
 });
 
 $('loginForm').onsubmit = (e) => { e.preventDefault(); auth('login'); };
-$('regBtn').onclick = () => { if ($('loginForm').reportValidity()) auth('register'); };
-socket.on('authError', (m) => { $('authErr').textContent = m; $('pickErr').textContent = m; });
+$('regBtn').onclick = () => {
+  if (!$('loginForm').reportValidity()) return;
+  if (!$('agree').checked) { $('authErr').textContent = 'כדי להירשם צריך לסמן שאת בת 18 ומעלה ומסכימה לתנאי השימוש'; return; }
+  auth('register');
+};
+socket.on('authError', (m) => { $('authErr').textContent = m; $('pickErr').textContent = m; $('resetErr').textContent = m; });
 
 const add = (p) => { players[p.id] = { ...p, bubble: '', bubbleUntil: 0 }; };
 const setPlayers = (list) => { for (const k in players) delete players[k]; Object.values(list).forEach(add); };
-const closePanels = () => { menuId = null; $('shop').style.display = 'none'; $('mapPanel').style.display = 'none'; $('friendsPanel').style.display = 'none'; $('emotes').style.display = 'none'; $('pmenu').style.display = 'none'; };
+const closePanels = () => { if (dmWith) { socket.emit('dmClose'); dmWith = null; } $('adminPanel').style.display = 'none'; $('dmPanel').style.display = 'none'; menuId = null; $('shop').style.display = 'none'; $('mapPanel').style.display = 'none'; $('friendsPanel').style.display = 'none'; $('emotes').style.display = 'none'; $('pmenu').style.display = 'none'; };
 
 socket.on('init', (d) => { inGame = true; $('login').style.display = 'none'; $('game').style.display = 'flex'; EMOTES = d.emotes; buildEmotes(); myId = d.me; catalog = d.catalog; room = d.room; inst = d.inst; coins = []; setPlayers(d.players); });
 socket.on('room', (d) => { crabs.clear(); room = d.room; inst = d.inst; coins = d.coins; pendingAt.clear(); setPlayers(d.players); closePanels(); });
@@ -294,6 +368,95 @@ function renderMap() {
 }
 $('mapBtn').onclick = () => { closePanels(); renderMap(); $('mapPanel').style.display = 'block'; };
 $('mapClose').onclick = closePanels;
+
+// ---- תנאי שימוש ----
+function showTerms(required) {
+  $('termsPanel').style.display = 'block';
+  $('termsAccept').style.display = required ? '' : 'none';
+  $('termsDecline').style.display = required ? '' : 'none';
+  $('termsClose').style.display = required ? 'none' : '';
+}
+$('termsLink').onclick = (e) => { e.preventDefault(); showTerms(false); };
+$('termsBtn').onclick = () => showTerms(false);
+$('termsClose').onclick = () => { $('termsPanel').style.display = 'none'; };
+$('termsAccept').onclick = () => { socket.emit('acceptTerms'); $('termsPanel').style.display = 'none'; };
+$('termsDecline').onclick = () => location.reload();
+
+// ---- שחזור סיסמה וקוד שחזור ----
+function showCode(code, msg) { $('codeMsg').textContent = msg; $('codeVal').textContent = code; $('codePanel').style.display = 'block'; }
+$('forgotBtn').onclick = () => { $('resetName').value = $('name').value; $('resetErr').textContent = ''; $('resetPanel').style.display = 'block'; };
+$('resetClose').onclick = () => { $('resetPanel').style.display = 'none'; };
+$('resetForm').onsubmit = (e) => { e.preventDefault(); socket.emit('resetPw', { username: $('resetName').value.trim(), code: $('resetCode').value, password: $('resetPass').value }); };
+socket.on('resetOk', ({ code }) => { $('resetPanel').style.display = 'none'; $('resetPass').value = ''; showCode(code, 'הסיסמה שונתה! זה קוד השחזור החדש שלך. הקוד הישן כבר לא תקף. עכשיו אפשר להיכנס עם הסיסמה החדשה.'); });
+socket.on('recoveryCode', ({ code, first }) => showCode(code, first ? 'ברוכה הבאה! זה קוד השחזור שלך. הוא מוצג רק עכשיו.' : 'זה קוד השחזור החדש שלך. הקוד הקודם כבר לא תקף.'));
+$('codeCopy').onclick = () => { try { navigator.clipboard.writeText($('codeVal').textContent); showToast('הועתק ✓'); } catch {} };
+$('codeClose').onclick = () => { $('codePanel').style.display = 'none'; };
+$('recBtn').onclick = () => { if (confirm('ליצור קוד שחזור חדש? הקוד הקודם יפסיק לעבוד.')) socket.emit('newRecovery'); };
+socket.on('init', (d) => {
+  if (d.needTerms) showTerms(true);
+  else if (!d.hasRecovery) showToast('עדיין אין לך קוד שחזור לסיסמה. אפשר ליצור בחלון החברות 👥');
+  if (d.admin) $('adminBtn').style.display = '';
+});
+
+// ---- הודעות פרטיות ----
+const dmAdd = (m) => {
+  const d = document.createElement('div'); d.className = 'dm ' + (m.me ? 'me' : 'them'); d.textContent = m.text;
+  $('dmList').appendChild(d); $('dmList').scrollTop = $('dmList').scrollHeight;
+};
+function openDm(f) {
+  closePanels();
+  dmWith = f.key; $('dmName').textContent = '💬 ' + f.name; $('dmList').innerHTML = '';
+  $('dmPanel').style.display = 'block';
+  socket.emit('dmOpen', f.key);
+}
+$('dmBack').onclick = () => { closePanels(); renderFriends(); $('friendsPanel').style.display = 'block'; };
+$('dmForm').onsubmit = (e) => {
+  e.preventDefault();
+  const t = $('dmInput').value.trim();
+  if (t && dmWith) socket.emit('dmSend', { to: dmWith, text: t });
+  $('dmInput').value = '';
+};
+socket.on('dmHistory', ({ key, msgs }) => { if (key === dmWith) { $('dmList').innerHTML = ''; msgs.forEach(dmAdd); } });
+socket.on('dm', (m) => {
+  if (m.key === dmWith) return dmAdd(m);
+  if (!m.me) { const f = fr.friends.find((x) => x.key === m.key); showToast('💬 הודעה חדשה מ' + (f ? f.name : m.key)); }
+});
+
+// ---- ניהול ----
+function renderAdmin(list) {
+  const box = $('adminList'); box.innerHTML = '';
+  if (!list.length) { box.textContent = 'אין דיווחים פתוחים 🎉'; return; }
+  for (const r of list) {
+    const d = document.createElement('div'); d.className = 'rep';
+    const h = document.createElement('div');
+    h.textContent = r.reporter + ' דיווחה על ' + r.reported + ' · ' + new Date(r.time).toLocaleString('he-IL');
+    const m = document.createElement('div'); m.className = 'msgs';
+    m.textContent = (r.recent && r.recent.length) ? r.recent.map((x) => '"' + x.text + '"').join(' · ') : '(אין הודעות אחרונות)';
+    const a = document.createElement('div'); a.className = 'acts';
+    const done = document.createElement('button'); done.type = 'button'; done.textContent = 'טופל';
+    done.onclick = () => socket.emit('adminHandle', r.id);
+    const ban = document.createElement('button'); ban.type = 'button'; ban.className = 'alt';
+    ban.textContent = r.banned ? 'ביטול השעיה' : 'השעיה';
+    ban.onclick = () => { if (r.banned || confirm('להשעות את ' + r.reported + '?')) socket.emit('adminBan', { name: r.reported, on: !r.banned }); };
+    a.append(done, ban); d.append(h, m, a); box.appendChild(d);
+  }
+}
+socket.on('adminReports', renderAdmin);
+socket.on('adminAlert', (a) => {
+  $('adminBtn').style.display = '';
+  $('adminBtn').textContent = '🛡️' + (a.count ? ' ' + a.count : '');
+  if (a.text) showToast('🚩 דיווח חדש: ' + a.text);
+});
+$('adminBtn').onclick = () => { closePanels(); socket.emit('adminReports'); $('adminPanel').style.display = 'block'; };
+$('adminClose').onclick = closePanels;
+$('adminRefresh').onclick = () => socket.emit('adminReports');
+$('adminBackup').onclick = () => socket.emit('adminBackup');
+socket.on('backup', (json) => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = 'olam-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click(); showToast('הגיבוי הורד ✓');
+});
 
 // ---- תנועה: לחיצה או נגיעה ----
 cv.addEventListener('pointerdown', (e) => {
@@ -422,7 +585,8 @@ function showToast(msg) {
 socket.on('notice', showToast);
 socket.on('friends', (d) => { fr = d; renderFriends(); });
 function renderFriends() {
-  $('friendsBtn').textContent = '👥' + (fr.requests.length ? ' ' + fr.requests.length : '');
+  const badge = fr.requests.length + fr.friends.reduce((n, f) => n + (f.unread || 0), 0);
+  $('friendsBtn').textContent = '👥' + (badge ? ' ' + badge : '');
   const box = $('friendsList'); box.innerHTML = '';
   const head = (t) => { const h = document.createElement('b'); h.textContent = t; h.style.cssText = 'display:block;margin:12px 0 4px'; box.appendChild(h); };
   const btn = (txt, fn, alt) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; if (alt) b.className = 'alt'; b.onclick = fn; return b; };
@@ -444,6 +608,7 @@ function renderFriends() {
   }
   fr.friends.forEach((f) => {
     const btns = [];
+    btns.push(btn('💬' + (f.unread ? ' ' + f.unread : ''), () => openDm(f)));
     if (f.online) btns.push(btn('הצטרפי', () => socket.emit('joinFriend', f.key)));
     btns.push(btn('הסרה', () => { if (confirm('להסיר את ' + f.name + ' מהחברות?')) socket.emit('unfriend', f.key); }, true));
     row(f.name + ' · ' + (f.online ? '🟢 ' + ROOM_INFO[f.room] + (f.server ? ' · שרת ' + f.server : '') : '⚪ לא מחוברת'), btns);
