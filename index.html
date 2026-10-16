@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>העולם</title>
+<style>
+  :root { --bg:#1f2a44; --card:#2b3856; --ink:#f4efe6; --accent:#f2b84b; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+  #login { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; }
+  #loginForm, #picker { background:var(--card); padding:24px; border-radius:16px; width:100%; max-width:340px;
+    display:flex; flex-direction:column; gap:14px; }
+  h1 { margin:0; font-size:26px; }
+  input[type=text], input[type=password] { padding:12px; border-radius:10px; border:0; font-size:16px; }
+  input[type=color] { width:100%; height:44px; border:0; border-radius:10px; background:none; }
+  button { padding:12px; border:0; border-radius:10px; background:var(--accent); color:#222;
+    font-size:16px; font-weight:700; cursor:pointer; }
+  button.alt { background:#44557d; color:var(--ink); }
+  #game { display:none; height:100%; flex-direction:column; position:relative; }
+  canvas { width:100%; flex:1; min-height:0; object-fit:contain; touch-action:none; background:#000; }
+  #bar { display:flex; gap:8px; padding:8px; background:var(--card); align-items:center; }
+  #bar input { flex:1; min-width:0; padding:12px; border-radius:10px; border:0; font-size:16px; }
+  #coins { font-weight:700; white-space:nowrap; }
+  #shop, #mapPanel, #friendsPanel, #adminPanel, #dmPanel { display:none; position:absolute; inset:0; background:rgba(10,15,30,.85); padding:14px; overflow:auto; }
+  .box { background:var(--card); border-radius:16px; padding:16px; max-width:460px; margin:0 auto; }
+  #shopHead { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .roomBtn { width:100%; display:flex; justify-content:space-between; align-items:center; padding:16px; font-size:17px; }
+  .roomBtn.here { background:#44557d; color:var(--ink); cursor:default; }
+  .road { height:34px; border-right:4px dashed #8da2d0; margin:0 auto; width:0; }
+  .pie { display:inline-block; width:18px; height:18px; border-radius:50%; border:2px solid var(--accent);
+    background:conic-gradient(var(--accent) calc(var(--p) * 1%), transparent 0); vertical-align:middle; flex:none; }
+  .lvl { display:inline-flex; align-items:center; gap:7px; font-size:13px; opacity:.9; }
+  .worldFill { opacity:.85; font-size:14px; margin-bottom:12px; }
+  .placeHead { font-weight:700; font-size:17px; margin-bottom:8px; display:flex; justify-content:space-between; }
+  .srv { width:100%; display:flex; flex-direction:column; gap:6px; padding:12px 14px; font-size:15px; margin-bottom:8px; text-align:right; }
+  .srv .row { display:flex; justify-content:space-between; width:100%; align-items:center; }
+  .srv .fill { height:7px; background:#1f2a44; border-radius:99px; overflow:hidden; }
+  .srv .fill > i { display:block; height:100%; background:var(--accent); }
+  .srv.here { background:#44557d; color:var(--ink); cursor:default; }
+  .srv.full:not(.here) { opacity:.55; cursor:default; }
+  .item { display:flex; align-items:center; gap:12px; padding:10px 0; border-top:1px solid #44557d; }
+  .item .ic { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; }
+  .item .nm { flex:1; }
+  .item small { opacity:.7; display:block; }
+  .item button { padding:8px 14px; font-size:14px; }
+  .item button:disabled { opacity:.4; cursor:default; }
+  #bar { flex-wrap: wrap; }
+  #bar input { flex: 1 1 140px; }
+  #emotes, #pmenu { display:none; position:absolute; bottom:70px; left:50%; transform:translateX(-50%);
+    background:var(--card); padding:12px; border-radius:14px; gap:8px; box-shadow:0 4px 20px rgba(0,0,0,.5); }
+  #emotes button { font-size:26px; padding:6px 10px; background:#44557d; }
+  #pmenu { flex-direction:column; min-width:210px; }
+  #pmsg { min-height:1.2em; font-size:14px; opacity:.85; }
+  #toast { display:none; position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:5;
+    background:var(--card); border:2px solid var(--accent); padding:10px 16px; border-radius:12px; max-width:90%; text-align:center; }
+  .acct { display:flex; align-items:center; gap:10px; background:#3a4a6e; border-radius:12px; padding:10px 12px; }
+  .acct .main { flex:1; display:flex; align-items:center; gap:12px; cursor:pointer; min-width:0; }
+  .acct .nm { font-weight:700; overflow:hidden; text-overflow:ellipsis; }
+  .acct .av { position:relative; width:34px; height:46px; flex:none; }
+  .acct .hd { position:absolute; top:0; left:7px; width:20px; height:20px; border-radius:50%; background:#f1d3b3; }
+  .acct .bd { position:absolute; top:19px; left:3px; width:28px; height:26px; border-radius:10px; }
+  .acct button { padding:6px 10px; font-size:13px; }
+  .modal { display:none; position:fixed; inset:0; background:rgba(10,15,30,.92); z-index:20; padding:16px; overflow:auto; }
+  .modal input[type=text], .modal input[type=password] { width:100%; margin-bottom:10px; }
+  .terms { font-size:14px; line-height:1.7; max-height:55vh; overflow:auto; padding:0 4px; }
+  .terms li { margin-bottom:6px; }
+  #codeVal { font-size:26px; font-weight:800; letter-spacing:2px; text-align:center; background:#1f2a44; border-radius:12px; padding:14px; margin:12px 0; direction:ltr; user-select:all; }
+  #dmList { display:flex; flex-direction:column; gap:6px; height:48vh; overflow:auto; padding:6px 2px; }
+  .dm { max-width:82%; padding:8px 12px; border-radius:14px; word-break:break-word; }
+  .dm.me { background:var(--accent); color:#222; align-self:flex-start; }
+  .dm.them { background:#44557d; align-self:flex-end; }
+  #dmForm { display:flex; gap:8px; margin-top:10px; }
+  #dmForm input { flex:1; min-width:0; padding:12px; border-radius:10px; border:0; font-size:16px; }
+  .rep { background:#1f2a44; border-radius:12px; padding:10px 12px; margin-bottom:10px; font-size:14px; }
+  .rep .msgs { opacity:.85; margin:6px 0; }
+  .rep .acts { display:flex; gap:8px; }
+</style>
+</head>
+<body>
+<div id="login">
+  <div id="picker" style="display:none">
+    <h1>מי משחקת?</h1>
+    <div id="cards" style="display:flex;flex-direction:column;gap:10px"></div>
+    <div id="pickErr" style="color:#ff9b9b;min-height:1.3em"></div>
+    <button type="button" id="otherBtn" class="alt">+ דמות אחרת או הרשמה</button>
+  </div>
+  <form id="loginForm">
+    <h1>ברוכה הבאה</h1>
+    <input type="text" id="name" placeholder="שם משתמשת" maxlength="16" required>
+    <input type="password" id="pass" placeholder="סיסמה" minlength="4" required>
+    <label>צבע הדמות (להרשמה) <input type="color" id="color" value="#e07a5f"></label>
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="remember"> זה המחשב שלי, זכרי אותי</label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="agree"> אני בת 18 ומעלה ומסכימה ל<a href="#" id="termsLink" style="color:var(--accent)">תנאי השימוש</a> (להרשמה)</label>
+    <div id="authErr" style="color:#ff9b9b;min-height:1.3em"></div>
+    <button>כניסה</button>
+    <button type="button" id="regBtn" class="alt">הרשמה חדשה</button>
+    <button type="button" id="forgotBtn" class="alt">שכחתי סיסמה</button>
+    <button type="button" id="backBtn" class="alt" style="display:none">חזרה לדמויות שלי</button>
+  </form>
+</div>
+<div id="termsPanel" class="modal"><div class="box">
+  <h2 style="margin:0 0 10px">תנאי שימוש ופרטיות</h2>
+  <ol class="terms">
+    <li>העולם מיועד לבנות 18 ומעלה בלבד.</li>
+    <li>אסור: הטרדה ואיומים, גזענות ושנאה, תוכן מיני מפורש או כזה שמערב קטינים, התחזות לאחרות או לצוות, חשיפת פרטים אישיים של אחרות, ספאם ופרסומות, קישורים ומספרי טלפון.</li>
+    <li>ההודעות מסוננות אוטומטית, ומילים בעייתיות מוסתרות בכוכביות.</li>
+    <li>אפשר לדווח על כל דמות. מנהלות העולם עשויות לקרוא את הדיווח ואת עד 5 ההודעות האחרונות של הדמות המדווחת, ולהשעות חשבונות שמפרים את הכללים, גם בלי התראה מראש.</li>
+    <li>מה נשמר: שם משתמשת, סיסמה מוצפנת (לא ניתן לראות אותה), צבע, פריטים ומטבעות, רשימות חברות וחסימות, והודעות פרטיות בין חברות (עד 100 האחרונות בכל שיחה). הודעות בכיכר, ביער ובחוף אינן נשמרות. גיבויי המערכת כוללים את כל המידע הזה.</li>
+    <li>אנחנו לא אוספות אימייל. שחזור סיסמה נעשה בעזרת קוד שחזור שמוצג פעם אחת. אם הקוד אבד והסיסמה נשכחה, אי אפשר לשחזר את החשבון.</li>
+    <li>העולם ניתן כמו שהוא, בלי התחייבות. ייתכנו תקלות, איפוסים ואובדן נתונים. המטבעות והפריטים וירטואליים בלבד וללא ערך כספי.</li>
+    <li>למחיקת חשבון או לשאלות: [כתבי כאן כתובת ליצירת קשר].</li>
+    <li>ייתכנו שינויים בתנאים, ונבקש את אישורך מחדש.</li>
+  </ol>
+  <button type="button" id="termsAccept" class="alt" style="display:none;width:100%;margin-bottom:8px;background:var(--accent);color:#222">אני מאשרת</button>
+  <button type="button" id="termsDecline" class="alt" style="display:none;width:100%">לא מסכימה</button>
+  <button type="button" id="termsClose" class="alt" style="width:100%">סגירה</button>
+</div></div>
+<div id="resetPanel" class="modal"><div class="box">
+  <h2 style="margin:0 0 10px">שחזור סיסמה</h2>
+  <p style="font-size:14px;opacity:.85">הכניסי את שם המשתמשת, את קוד השחזור שקיבלת בהרשמה, וסיסמה חדשה.</p>
+  <form id="resetForm">
+    <input type="text" id="resetName" placeholder="שם משתמשת" required>
+    <input type="text" id="resetCode" placeholder="קוד שחזור (XXXX-XXXX-XXXX)" required autocomplete="off" style="direction:ltr">
+    <input type="password" id="resetPass" placeholder="סיסמה חדשה" minlength="4" required>
+    <div id="resetErr" style="color:#ff9b9b;min-height:1.3em;margin-bottom:8px"></div>
+    <button style="width:100%;margin-bottom:8px">שינוי סיסמה</button>
+    <button type="button" id="resetClose" class="alt" style="width:100%">סגירה</button>
+  </form>
+</div></div>
+<div id="codePanel" class="modal"><div class="box">
+  <h2 style="margin:0 0 6px">קוד שחזור 🔑</h2>
+  <p id="codeMsg" style="font-size:14px"></p>
+  <div id="codeVal"></div>
+  <p style="font-size:13px;opacity:.8">צלמי מסך או רשמי אותו במקום בטוח. הקוד מאפשר לאפס את הסיסמה אם תשכחי אותה.</p>
+  <button type="button" id="codeCopy" class="alt" style="width:100%;margin-bottom:8px">העתקה</button>
+  <button type="button" id="codeClose" style="width:100%">שמרתי</button>
+</div></div>
+<div id="game">
+  <canvas id="cv" width="800" height="500"></canvas>
+  <form id="bar">
+    <button type="button" id="shopBtn" class="alt" title="חנות">🛍️</button>
+    <button type="button" id="mapBtn" class="alt" title="מפה">🗺️</button>
+    <button type="button" id="friendsBtn" class="alt" title="חברות">👥</button>
+    <button type="button" id="emoBtn" class="alt" title="רגשונים">😀</button>
+    <button type="button" id="adminBtn" class="alt" title="ניהול" style="display:none">🛡️</button>
+    <span id="coins">🪙 0</span>
+    <input id="msg" maxlength="100" placeholder="כתבי הודעה…" autocomplete="off">
+    <button>שליחה</button>
+  </form>
+  <div id="toast"></div>
+  <div id="friendsPanel"><div class="box">
+    <div id="shopHead"><b>חברות</b><button type="button" id="friendsClose" class="alt">סגירה</button></div>
+    <div id="friendsList"></div>
+    <button type="button" id="recBtn" class="alt" style="width:100%;margin-top:16px">צרי קוד שחזור חדש לסיסמה</button>
+    <button type="button" id="termsBtn" class="alt" style="width:100%;margin-top:8px">תנאי שימוש</button>
+    <button type="button" id="logoutBtn" class="alt" style="width:100%;margin-top:16px">התנתקות</button>
+  </div></div>
+  <div id="dmPanel"><div class="box">
+    <div id="shopHead"><b id="dmName"></b><button type="button" id="dmBack" class="alt">חזרה</button></div>
+    <div id="dmList"></div>
+    <form id="dmForm"><input id="dmInput" maxlength="300" placeholder="הודעה פרטית…" autocomplete="off"><button>שליחה</button></form>
+  </div></div>
+  <div id="adminPanel"><div class="box">
+    <div id="shopHead"><b>ניהול</b><button type="button" id="adminClose" class="alt">סגירה</button></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button type="button" id="adminRefresh" class="alt" style="flex:1">רענון</button>
+      <button type="button" id="adminBackup" class="alt" style="flex:1">הורדת גיבוי</button>
+    </div>
+    <div id="adminList"></div>
+  </div></div>
+  <div id="emotes"></div>
+  <div id="pmenu"><b id="pname"></b><div id="pmsg"></div>
+    <button type="button" id="pfriend" class="alt"></button>
+    <button type="button" id="pblock" class="alt"></button>
+    <button type="button" id="preport" class="alt">דיווח</button>
+    <button type="button" id="pclose" class="alt">סגירה</button></div>
+  <div id="shop"><div class="box">
+    <div id="shopHead"><b>החנות</b><span id="shopCoins"></span><button type="button" id="shopClose" class="alt">סגירה</button></div>
+    <div id="items"></div>
+  </div></div>
+  <div id="mapPanel"><div class="box">
+    <div id="shopHead"><b>מפה</b><button type="button" id="mapClose" class="alt">סגירה</button></div>
+    <div id="mapRooms"></div>
+  </div></div>
+</div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const socket = io();
+const cv = $('cv'), ctx = cv.getContext('2d');
+let myId = null, catalog = [], mine = { coins: 0, owned: [] };
+let dmWith = null;
+let room = 'square', inst = null, coins = [], counts = { world: 0, rooms: {} };
+const pendingAt = new Map();
+const crabs = new Map(), pops = [];
+const players = {};
+const ROOM_INFO = { square: '🏙️ כיכר', forest: '🌲 יער', beach: '🏖️ חוף' };
+let EMOTES = [], menuId = null;
+
+const auth = (mode) => socket.emit('auth', { mode, username: $('name').value.trim(), password: $('pass').value,
+  color: $('color').value, remember: $('remember').checked, agreed: $('agree').checked });
+
+// ---- דמויות שמורות במחשב הזה ----
+const ACC_KEY = 'olamAccounts';
+const getAccs = () => { try { const a = JSON.parse(localStorage.getItem(ACC_KEY)); return Array.isArray(a) ? a : []; } catch { return []; } };
+const setAccs = (a) => { try { localStorage.setItem(ACC_KEY, JSON.stringify(a)); } catch {} };
+try { // מעבר מהגרסה הקודמת
+  const old = JSON.parse(localStorage.getItem('olamAuth'));
+  if (old && old.token) setAccs(getAccs().concat({ username: old.username, token: old.token, color: '#e07a5f' }));
+  localStorage.removeItem('olamAuth');
+} catch {}
+let inGame = false, tokenUser = '';
+
+function showForm(prefill) {
+  $('picker').style.display = 'none'; $('loginForm').style.display = 'flex';
+  $('backBtn').style.display = getAccs().length ? 'block' : 'none';
+  if (prefill) { $('name').value = prefill; $('pass').focus(); }
+}
+function showPicker() {
+  const accs = getAccs();
+  if (!accs.length) return showForm();
+  $('loginForm').style.display = 'none'; $('picker').style.display = 'flex';
+  const box = $('cards'); box.innerHTML = '';
+  for (const a of accs) {
+    const card = document.createElement('div'); card.className = 'acct';
+    const main = document.createElement('div'); main.className = 'main';
+    main.innerHTML = '<span class="av"><span class="hd"></span><span class="bd"></span></span><span class="nm"></span>';
+    main.querySelector('.bd').style.background = /^#[0-9a-f]{6}$/i.test(a.color) ? a.color : '#e07a5f';
+    main.querySelector('.nm').textContent = a.username;
+    main.onclick = () => { tokenUser = a.username; $('pickErr').textContent = ''; socket.emit('auth', { mode: 'token', username: a.username, token: a.token }); };
+    const pw = document.createElement('button'); pw.type = 'button'; pw.className = 'alt'; pw.textContent = 'סיסמה';
+    pw.onclick = () => showForm(a.username);
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'alt'; x.textContent = '✕'; x.title = 'הסרה ממחשב זה';
+    x.onclick = () => {
+      if (!confirm('להסיר את ' + a.username + ' ממחשב זה? (הדמות עצמה לא תימחק)')) return;
+      socket.emit('forget', { username: a.username, token: a.token });
+      setAccs(getAccs().filter((z) => z.username !== a.username)); showPicker();
+    };
+    card.append(main, pw, x); box.appendChild(card);
+  }
+}
+$('otherBtn').onclick = () => showForm();
+$('backBtn').onclick = showPicker;
+showPicker();
+socket.on('connect', () => { if (inGame) location.reload(); }); // השרת איבד אותנו: חוזרים למסך הבחירה
+socket.on('token', (t) => setAccs(getAccs().filter((z) => z.username.toLowerCase() !== t.username.toLowerCase()).concat(t)));
+socket.on('tokenBad', () => {
+  setAccs(getAccs().filter((z) => z.username !== tokenUser));
+  showForm(tokenUser); $('authErr').textContent = 'הכניסה האוטומטית פגה, נא להיכנס עם סיסמה';
+});
+
+$('loginForm').onsubmit = (e) => { e.preventDefault(); auth('login'); };
+$('regBtn').onclick = () => {
+  if (!$('loginForm').reportValidity()) return;
+  if (!$('agree').checked) { $('authErr').textContent = 'כדי להירשם צריך לסמן שאת בת 18 ומעלה ומסכימה לתנאי השימוש'; return; }
+  auth('register');
+};
+socket.on('authError', (m) => { $('authErr').textContent = m; $('pickErr').textContent = m; $('resetErr').textContent = m; });
+
+const add = (p) => { players[p.id] = { ...p, bubble: '', bubbleUntil: 0 }; };
+const setPlayers = (list) => { for (const k in players) delete players[k]; Object.values(list).forEach(add); };
+const closePanels = () => { if (dmWith) { socket.emit('dmClose'); dmWith = null; } $('adminPanel').style.display = 'none'; $('dmPanel').style.display = 'none'; menuId = null; $('shop').style.display = 'none'; $('mapPanel').style.display = 'none'; $('friendsPanel').style.display = 'none'; $('emotes').style.display = 'none'; $('pmenu').style.display = 'none'; };
+
+socket.on('init', (d) => { inGame = true; $('login').style.display = 'none'; $('game').style.display = 'flex'; EMOTES = d.emotes; buildEmotes(); myId = d.me; catalog = d.catalog; room = d.room; inst = d.inst; coins = []; setPlayers(d.players); });
+socket.on('room', (d) => { crabs.clear(); room = d.room; inst = d.inst; coins = d.coins; pendingAt.clear(); setPlayers(d.players); closePanels(); });
+socket.on('joined', add);
+socket.on('left', (id) => delete players[id]);
+socket.on('moved', ({ id, x, y }) => { if (players[id]) { players[id].tx = x; players[id].ty = y; } });
+socket.on('wore', ({ id, wear }) => { if (players[id]) players[id].wear = wear; renderShop(); });
+socket.on('chat', ({ id, text }) => {
+  if (players[id]) { players[id].bubble = text; players[id].bubbleUntil = Date.now() + 5000; }
+});
+socket.on('me', (m) => { mine = m; renderShop(); if (menuId) openMenu(menuId); });
+socket.on('emote', ({ id, e }) => { if (players[id]) { players[id].emote = e; players[id].emoteUntil = Date.now() + 3000; } });
+socket.on('coins', (list) => { coins = list; });
+socket.on('crabs', (list) => {
+  const ids = new Set(list.map((c) => c.id));
+  for (const id of [...crabs.keys()]) if (!ids.has(id)) crabs.delete(id);
+  for (const c of list) {
+    const o = crabs.get(c.id);
+    if (o) { o.tx = c.x; o.ty = c.y; } else crabs.set(c.id, { x: c.x, y: c.y, tx: c.x, ty: c.y });
+  }
+});
+socket.on('pop', (q) => pops.push({ ...q, t: Date.now() }));
+socket.on('counts', (c) => { counts = c; renderMap(); });
+
+// ---- חנות ----
+const item = (id) => catalog.find((i) => i.id === id);
+function renderShop() {
+  $('coins').textContent = '🪙 ' + mine.coins;
+  $('shopCoins').textContent = '🪙 ' + mine.coins;
+  const wear = (players[myId] && players[myId].wear) || {};
+  $('items').innerHTML = '';
+  for (const it of catalog) {
+    const owned = mine.owned.includes(it.id), worn = wear[it.slot] === it.id;
+    const row = document.createElement('div'); row.className = 'item';
+    const ic = document.createElement('div'); ic.className = 'ic';
+    if (it.color) ic.style.background = it.color; else ic.textContent = it.icon;
+    const nm = document.createElement('div'); nm.className = 'nm';
+    nm.textContent = it.name;
+    const sm = document.createElement('small');
+    sm.textContent = owned ? (worn ? 'לבושה עכשיו' : 'יש לך') : '🪙 ' + it.price;
+    nm.appendChild(sm);
+    const b = document.createElement('button');
+    if (!owned) {
+      b.textContent = 'קני'; b.disabled = mine.coins < it.price;
+      b.onclick = () => socket.emit('buy', it.id);
+    } else {
+      b.textContent = worn ? 'הורידי' : 'לבשי';
+      b.onclick = () => socket.emit('wear', { slot: it.slot, id: worn ? null : it.id });
+    }
+    row.append(ic, nm, b); $('items').appendChild(row);
+  }
+}
+const openShop = () => { closePanels(); renderShop(); $('shop').style.display = 'block'; };
+$('shopBtn').onclick = openShop;
+$('shopClose').onclick = closePanels;
+
+// ---- מפה ----
+const LEVELS = ['פנוי', 'שקט', 'בינוני', 'עמוס', 'מלא'];
+const lvl = (l) => { // עיגול מלא יחסית: ריק, רבע, חצי, שלושת רבעים, מלא
+  const w = document.createElement('span'); w.className = 'lvl';
+  const p = document.createElement('i'); p.className = 'pie'; p.style.setProperty('--p', l * 25);
+  const t = document.createElement('span'); t.textContent = LEVELS[l];
+  w.append(p, t); return w;
+};
+function renderMap() {
+  const box = $('mapRooms'); box.innerHTML = '';
+  const world = document.createElement('div'); world.className = 'worldFill';
+  world.append('עומס בעולם: ', lvl(counts.world || 0));
+  box.appendChild(world);
+  Object.keys(ROOM_INFO).forEach((r, i) => {
+    if (i) { const road = document.createElement('div'); road.className = 'road'; box.appendChild(road); }
+    const servers = (counts.rooms && counts.rooms[r]) || [];
+    const head = document.createElement('div'); head.className = 'placeHead';
+    head.innerHTML = '<span>' + ROOM_INFO[r] + '</span>';
+    box.appendChild(head);
+    if (!servers.length) {
+      const b = document.createElement('button');
+      b.textContent = r === room ? 'את כאן' : 'כניסה';
+      if (r === room) { b.className = 'roomBtn here'; b.disabled = true; }
+      else b.onclick = () => socket.emit('goto', r);
+      box.appendChild(b);
+      return;
+    }
+    for (const s of servers) {
+      const here = s.id === inst;
+      const b = document.createElement('button');
+      b.className = 'srv' + (here ? ' here' : '') + (s.full ? ' full' : '');
+      const row = document.createElement('div'); row.className = 'row';
+      const nm = document.createElement('span');
+      nm.textContent = 'שרת ' + s.no + (here ? ' · את כאן' : '');
+      row.append(nm, lvl(s.level));
+      b.append(row);
+      if (!here && !s.full) b.onclick = () => socket.emit('joinServer', s.id);
+      box.appendChild(b);
+    }
+    if (servers.every((s) => s.full)) {
+      const b = document.createElement('button');
+      b.className = 'alt'; b.style.width = '100%';
+      b.textContent = 'פתחי שרת חדש';
+      b.onclick = () => socket.emit('openServer', r);
+      box.appendChild(b);
+    }
+  });
+}
+$('mapBtn').onclick = () => { closePanels(); renderMap(); $('mapPanel').style.display = 'block'; };
+$('mapClose').onclick = closePanels;
+
+// ---- תנאי שימוש ----
+function showTerms(required) {
+  $('termsPanel').style.display = 'block';
+  $('termsAccept').style.display = required ? '' : 'none';
+  $('termsDecline').style.display = required ? '' : 'none';
+  $('termsClose').style.display = required ? 'none' : '';
+}
+$('termsLink').onclick = (e) => { e.preventDefault(); showTerms(false); };
+$('termsBtn').onclick = () => showTerms(false);
+$('termsClose').onclick = () => { $('termsPanel').style.display = 'none'; };
+$('termsAccept').onclick = () => { socket.emit('acceptTerms'); $('termsPanel').style.display = 'none'; };
+$('termsDecline').onclick = () => location.reload();
+
+// ---- שחזור סיסמה וקוד שחזור ----
+function showCode(code, msg) { $('codeMsg').textContent = msg; $('codeVal').textContent = code; $('codePanel').style.display = 'block'; }
+$('forgotBtn').onclick = () => { $('resetName').value = $('name').value; $('resetErr').textContent = ''; $('resetPanel').style.display = 'block'; };
+$('resetClose').onclick = () => { $('resetPanel').style.display = 'none'; };
+$('resetForm').onsubmit = (e) => { e.preventDefault(); socket.emit('resetPw', { username: $('resetName').value.trim(), code: $('resetCode').value, password: $('resetPass').value }); };
+socket.on('resetOk', ({ code }) => { $('resetPanel').style.display = 'none'; $('resetPass').value = ''; showCode(code, 'הסיסמה שונתה! זה קוד השחזור החדש שלך. הקוד הישן כבר לא תקף. עכשיו אפשר להיכנס עם הסיסמה החדשה.'); });
+socket.on('recoveryCode', ({ code, first }) => showCode(code, first ? 'ברוכה הבאה! זה קוד השחזור שלך. הוא מוצג רק עכשיו.' : 'זה קוד השחזור החדש שלך. הקוד הקודם כבר לא תקף.'));
+$('codeCopy').onclick = () => { try { navigator.clipboard.writeText($('codeVal').textContent); showToast('הועתק ✓'); } catch {} };
+$('codeClose').onclick = () => { $('codePanel').style.display = 'none'; };
+$('recBtn').onclick = () => { if (confirm('ליצור קוד שחזור חדש? הקוד הקודם יפסיק לעבוד.')) socket.emit('newRecovery'); };
+socket.on('init', (d) => {
+  if (d.needTerms) showTerms(true);
+  else if (!d.hasRecovery) showToast('עדיין אין לך קוד שחזור לסיסמה. אפשר ליצור בחלון החברות 👥');
+  if (d.admin) $('adminBtn').style.display = '';
+});
+
+// ---- הודעות פרטיות ----
+const dmAdd = (m) => {
+  const d = document.createElement('div'); d.className = 'dm ' + (m.me ? 'me' : 'them'); d.textContent = m.text;
+  $('dmList').appendChild(d); $('dmList').scrollTop = $('dmList').scrollHeight;
+};
+function openDm(f) {
+  closePanels();
+  dmWith = f.key; $('dmName').textContent = '💬 ' + f.name; $('dmList').innerHTML = '';
+  $('dmPanel').style.display = 'block';
+  socket.emit('dmOpen', f.key);
+}
+$('dmBack').onclick = () => { closePanels(); renderFriends(); $('friendsPanel').style.display = 'block'; };
+$('dmForm').onsubmit = (e) => {
+  e.preventDefault();
+  const t = $('dmInput').value.trim();
+  if (t && dmWith) socket.emit('dmSend', { to: dmWith, text: t });
+  $('dmInput').value = '';
+};
+socket.on('dmHistory', ({ key, msgs }) => { if (key === dmWith) { $('dmList').innerHTML = ''; msgs.forEach(dmAdd); } });
+socket.on('dm', (m) => {
+  if (m.key === dmWith) return dmAdd(m);
+  if (!m.me) { const f = fr.friends.find((x) => x.key === m.key); showToast('💬 הודעה חדשה מ' + (f ? f.name : m.key)); }
+});
+
+// ---- ניהול ----
+function renderAdmin(list) {
+  const box = $('adminList'); box.innerHTML = '';
+  if (!list.length) { box.textContent = 'אין דיווחים פתוחים 🎉'; return; }
+  for (const r of list) {
+    const d = document.createElement('div'); d.className = 'rep';
+    const h = document.createElement('div');
+    h.textContent = r.reporter + ' דיווחה על ' + r.reported + ' · ' + new Date(r.time).toLocaleString('he-IL');
+    const m = document.createElement('div'); m.className = 'msgs';
+    m.textContent = (r.recent && r.recent.length) ? r.recent.map((x) => '"' + x.text + '"').join(' · ') : '(אין הודעות אחרונות)';
+    const a = document.createElement('div'); a.className = 'acts';
+    const done = document.createElement('button'); done.type = 'button'; done.textContent = 'טופל';
+    done.onclick = () => socket.emit('adminHandle', r.id);
+    const ban = document.createElement('button'); ban.type = 'button'; ban.className = 'alt';
+    ban.textContent = r.banned ? 'ביטול השעיה' : 'השעיה';
+    ban.onclick = () => { if (r.banned || confirm('להשעות את ' + r.reported + '?')) socket.emit('adminBan', { name: r.reported, on: !r.banned }); };
+    a.append(done, ban); d.append(h, m, a); box.appendChild(d);
+  }
+}
+socket.on('adminReports', renderAdmin);
+socket.on('adminAlert', (a) => {
+  $('adminBtn').style.display = '';
+  $('adminBtn').textContent = '🛡️' + (a.count ? ' ' + a.count : '');
+  if (a.text) showToast('🚩 דיווח חדש: ' + a.text);
+});
+$('adminBtn').onclick = () => { closePanels(); socket.emit('adminReports'); $('adminPanel').style.display = 'block'; };
+$('adminClose').onclick = closePanels;
+$('adminRefresh').onclick = () => socket.emit('adminReports');
+$('adminBackup').onclick = () => socket.emit('adminBackup');
+socket.on('backup', (json) => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = 'olam-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click(); showToast('הגיבוי הורד ✓');
+});
+
+// ---- תנועה: לחיצה או נגיעה ----
+cv.addEventListener('pointerdown', (e) => {
+  const r = cv.getBoundingClientRect();
+  const s = Math.min(r.width / 800, r.height / 500);
+  const x = (e.clientX - r.left - (r.width - 800 * s) / 2) / s;
+  const y = (e.clientY - r.top - (r.height - 500 * s) / 2) / s;
+  const inBand = y > 180 && y < 420;
+  if (room === 'square' && x > 730 && inBand) return socket.emit('goto', 'forest');
+  if (room === 'square' && x < 70 && inBand) return socket.emit('goto', 'beach');
+  if (room === 'forest' && x < 70 && inBand) return socket.emit('goto', 'square');
+  if (room === 'beach' && x > 730 && inBand) return socket.emit('goto', 'square');
+  const hit = Object.values(players).find((p) => p.id !== myId && Math.abs(x - p.x) < 24 && y > p.y - 76 && y < p.y + 12);
+  if (hit) return openMenu(hit.id);
+  if (room === 'square' && x > 340 && x < 460 && y > 40 && y < 140) return openShop();
+  socket.emit('move', { x, y });
+});
+
+$('bar').onsubmit = (e) => {
+  e.preventDefault();
+  if ($('msg').value.trim()) socket.emit('chat', $('msg').value);
+  $('msg').value = '';
+};
+
+// ---- ציור ----
+function bubble(text, x, y) {
+  ctx.font = '15px system-ui, Arial'; ctx.direction = 'rtl';
+  const w = Math.min(ctx.measureText(text).width + 20, 260), h = 28;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.roundRect(x - w / 2, y - h, w, h, 10); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x - 6, y); ctx.lineTo(x + 6, y); ctx.lineTo(x, y + 8); ctx.fill();
+  ctx.fillStyle = '#222'; ctx.textAlign = 'center';
+  ctx.fillText(text, x, y - 9, w - 16);
+}
+
+function hat(id, x, hy) {
+  if (id === 'hat_cap') {
+    ctx.fillStyle = '#e63946';
+    ctx.beginPath(); ctx.arc(x, hy - 2, 13, Math.PI, 0); ctx.fill();
+    ctx.fillRect(x, hy - 5, 17, 4);
+  } else if (id === 'hat_crown') {
+    ctx.fillStyle = '#f2b84b'; ctx.beginPath();
+    [[-12,-9],[-12,-24],[-6,-16],[0,-26],[6,-16],[12,-24],[12,-9]].forEach(([dx, dy], i) =>
+      i ? ctx.lineTo(x + dx, hy + dy) : ctx.moveTo(x + dx, hy + dy));
+    ctx.fill();
+  } else if (id === 'hat_party') {
+    ctx.fillStyle = '#9b5de5'; ctx.beginPath();
+    ctx.moveTo(x - 10, hy - 9); ctx.lineTo(x + 10, hy - 9); ctx.lineTo(x, hy - 34); ctx.fill();
+    ctx.fillStyle = '#ffd60a'; ctx.beginPath(); ctx.arc(x, hy - 34, 3.5, 0, 7); ctx.fill();
+  }
+}
+
+const TREES = Array.from({ length: 14 }, (_, i) => ({ x: (i * 61 + 30) % 780 + 10, y: 70 + (i * 37) % 55 }));
+
+function exitBox(x, label) {
+  ctx.fillStyle = '#b08968'; ctx.fillRect(x, 180, 70, 240);
+  ctx.fillStyle = '#fff'; ctx.font = '14px system-ui, Arial'; ctx.fillText(label, x + 35, 300);
+}
+function drawRoom() {
+  ctx.textAlign = 'center';
+  if (room === 'forest') {
+    ctx.fillStyle = '#2d5a3d'; ctx.fillRect(0, 0, 800, 140);
+    ctx.fillStyle = '#6a994e'; ctx.fillRect(0, 140, 800, 360);
+    for (const t of TREES) {
+      ctx.fillStyle = '#5c4033'; ctx.fillRect(t.x - 6, t.y, 12, 50);
+      ctx.fillStyle = '#1b4332'; ctx.beginPath(); ctx.arc(t.x, t.y - 4, 30, 0, 7); ctx.fill();
+    }
+    exitBox(0, '🏙️ כיכר');
+  } else if (room === 'beach') {
+    ctx.fillStyle = '#4cc9f0'; ctx.fillRect(0, 0, 800, 140);
+    ctx.fillStyle = '#2a9fd6'; ctx.fillRect(0, 90, 800, 50);
+    ctx.fillStyle = '#f0dca0'; ctx.fillRect(0, 140, 800, 360);
+    ctx.font = '34px Arial'; ctx.fillText('☀️', 90, 60); ctx.fillText('⛱️', 220, 200); ctx.fillText('🌴', 560, 190);
+    exitBox(730, '🏙️ כיכר');
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px system-ui, Arial';
+    ctx.fillText('🦀 תפסי סרטנים! 4 מטבעות לכל סרטן', 400, 32);
+  } else {
+    ctx.fillStyle = '#6c8ebf'; ctx.fillRect(0, 0, 800, 140);
+    ctx.fillStyle = '#c9b38c'; ctx.fillRect(0, 140, 800, 360);
+    ctx.fillStyle = '#8a6d3b'; ctx.fillRect(340, 40, 120, 100);
+    ctx.fillStyle = '#fff'; ctx.font = '16px system-ui, Arial'; ctx.fillText('🛍️ חנות', 400, 30);
+    exitBox(730, '🌲 יער'); exitBox(0, '🏖️ חוף');
+  }
+}
+
+function drawCoins() {
+  const t = Date.now() / 300;
+  coins.forEach((c, i) => {
+    const b = Math.sin(t + i) * 2;
+    ctx.fillStyle = 'rgba(0,0,0,.2)';
+    ctx.beginPath(); ctx.ellipse(c.x, c.y, 8, 3, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#f2b84b'; ctx.strokeStyle = '#b8860b'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(c.x, c.y - 10 + b, 10, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#b8860b'; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center';
+    ctx.fillText('$', c.x, c.y - 6 + b);
+  });
+}
+
+function drawCrabs(dt) {
+  const k = Math.min(1, dt * 12);
+  ctx.font = '30px Arial'; ctx.textAlign = 'center';
+  for (const c of crabs.values()) {
+    c.x += (c.tx - c.x) * k; c.y += (c.ty - c.y) * k;
+    ctx.fillStyle = 'rgba(0,0,0,.2)';
+    ctx.beginPath(); ctx.ellipse(c.x, c.y + 2, 12, 4, 0, 0, 7); ctx.fill();
+    ctx.fillText('🦀', c.x, c.y);
+  }
+}
+function drawPops() {
+  const now = Date.now(), dir = ctx.direction; ctx.direction = 'ltr';
+  for (let i = pops.length - 1; i >= 0; i--) {
+    const q = pops[i], a = (now - q.t) / 1000;
+    if (a > 1) { pops.splice(i, 1); continue; }
+    ctx.globalAlpha = 1 - a; ctx.fillStyle = '#ffd60a'; ctx.strokeStyle = '#7a5c00'; ctx.lineWidth = 3;
+    ctx.font = 'bold 20px Arial'; ctx.textAlign = 'center';
+    ctx.strokeText(q.text, q.x, q.y - a * 40); ctx.fillText(q.text, q.x, q.y - a * 40);
+  }
+  ctx.globalAlpha = 1; ctx.direction = dir;
+}
+
+let fr = { requests: [], friends: [] }, toastTimer = null;
+function showToast(msg) {
+  const t = $('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+}
+socket.on('notice', showToast);
+socket.on('friends', (d) => { fr = d; renderFriends(); });
+function renderFriends() {
+  const badge = fr.requests.length + fr.friends.reduce((n, f) => n + (f.unread || 0), 0);
+  $('friendsBtn').textContent = '👥' + (badge ? ' ' + badge : '');
+  const box = $('friendsList'); box.innerHTML = '';
+  const head = (t) => { const h = document.createElement('b'); h.textContent = t; h.style.cssText = 'display:block;margin:12px 0 4px'; box.appendChild(h); };
+  const btn = (txt, fn, alt) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; if (alt) b.className = 'alt'; b.onclick = fn; return b; };
+  const row = (label, btns) => {
+    const r = document.createElement('div'); r.className = 'item';
+    const n = document.createElement('div'); n.className = 'nm'; n.textContent = label;
+    r.appendChild(n); btns.forEach((b) => r.appendChild(b)); box.appendChild(r);
+  };
+  if (fr.requests.length) {
+    head('בקשות חברות');
+    fr.requests.forEach((q) => row(q.name, [
+      btn('אישור', () => socket.emit('friendRespond', { key: q.key, accept: true })),
+      btn('דחייה', () => socket.emit('friendRespond', { key: q.key, accept: false }), true)]));
+  }
+  head('החברות שלי');
+  if (!fr.friends.length) {
+    const e = document.createElement('div'); e.style.opacity = '.7';
+    e.textContent = 'עוד אין חברות. לחצי על דמות בעולם ושלחי בקשה.'; box.appendChild(e);
+  }
+  fr.friends.forEach((f) => {
+    const btns = [];
+    btns.push(btn('💬' + (f.unread ? ' ' + f.unread : ''), () => openDm(f)));
+    if (f.online) btns.push(btn('הצטרפי', () => socket.emit('joinFriend', f.key)));
+    btns.push(btn('הסרה', () => { if (confirm('להסיר את ' + f.name + ' מהחברות?')) socket.emit('unfriend', f.key); }, true));
+    row(f.name + ' · ' + (f.online ? '🟢 ' + ROOM_INFO[f.room] + (f.server ? ' · שרת ' + f.server : '') : '⚪ לא מחוברת'), btns);
+  });
+}
+$('friendsBtn').onclick = () => { closePanels(); renderFriends(); $('friendsPanel').style.display = 'block'; };
+$('friendsClose').onclick = closePanels;
+$('logoutBtn').onclick = () => location.reload();
+
+function buildEmotes() {
+  const box = $('emotes'); box.innerHTML = '';
+  EMOTES.forEach((em, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = em;
+    b.onclick = () => { socket.emit('emote', i); box.style.display = 'none'; };
+    box.appendChild(b);
+  });
+}
+$('emoBtn').onclick = () => { const v = $('emotes').style.display === 'flex'; closePanels(); if (!v) $('emotes').style.display = 'flex'; };
+
+function openMenu(id) {
+  const p = players[id]; if (!p) return;
+  menuId = id;
+  const blocked = (mine.blocked || []).includes(p.name.toLowerCase());
+  $('pname').textContent = p.name;
+  const isFriend = fr.friends.some((f) => f.key === p.name.toLowerCase());
+  $('pfriend').textContent = isFriend ? 'חברה ✓' : 'בקשת חברות';
+  $('pfriend').disabled = isFriend;
+  $('pfriend').onclick = () => socket.emit('friendReq', id);
+  $('pblock').textContent = blocked ? 'ביטול חסימה' : 'חסימה';
+  $('pblock').onclick = () => socket.emit('block', id);
+  $('preport').onclick = () => { socket.emit('report', id); $('pmsg').textContent = 'הדיווח נשלח. תודה!'; };
+  $('pclose').onclick = () => { menuId = null; closePanels(); };
+  $('pmenu').style.display = 'flex';
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.1); last = now;
+  drawRoom();
+  if (room === 'forest') drawCoins();
+  if (room === 'beach') drawCrabs(dt);
+  const list = Object.values(players).sort((a, b) => a.y - b.y);
+  for (const p of list) {
+    const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy), step = 180 * dt;
+    if (d > step) { p.x += dx / d * step; p.y += dy / d * step; } else { p.x = p.tx; p.y = p.ty; }
+    const wear = p.wear || {}, topItem = wear.top && item(wear.top);
+    const pantsItem = wear.pants && item(wear.pants), shoesItem = wear.shoes && item(wear.shoes);
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + 4, 16, 6, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.roundRect(p.x - 14, p.y - 44, 28, 46, 12); ctx.fill();
+    if (pantsItem) {
+      ctx.fillStyle = pantsItem.color;
+      ctx.beginPath(); ctx.roundRect(p.x - 14, p.y - 18, 28, 20, 8); ctx.fill();
+    }
+    if (shoesItem) {
+      ctx.fillStyle = shoesItem.color; ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+      ctx.fillRect(p.x - 14, p.y - 2, 12, 6); ctx.fillRect(p.x + 2, p.y - 2, 12, 6);
+      ctx.strokeRect(p.x - 14, p.y - 2, 12, 6); ctx.strokeRect(p.x + 2, p.y - 2, 12, 6);
+    }
+    if (topItem) {
+      ctx.fillStyle = topItem.color;
+      ctx.beginPath(); ctx.roundRect(p.x - 14, p.y - 44, 28, 28, 10); ctx.fill();
+    }
+    ctx.fillStyle = '#f1d3b3';
+    ctx.beginPath(); ctx.arc(p.x, p.y - 56, 13, 0, 7); ctx.fill();
+    if (wear.glasses) {
+      ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.fillStyle = '#111';
+      for (const dx of [-5.5, 5.5]) { ctx.beginPath(); ctx.arc(p.x + dx, p.y - 56, 4.5, 0, 7); wear.glasses === 'glasses_sun' ? ctx.fill() : ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(p.x - 1, p.y - 56); ctx.lineTo(p.x + 1, p.y - 56); ctx.stroke();
+    }
+    if (wear.hat) hat(wear.hat, p.x, p.y - 56);
+    ctx.fillStyle = '#fff'; ctx.font = '13px system-ui, Arial'; ctx.textAlign = 'center';
+    ctx.fillText(p.name + (p.id === myId ? ' (את)' : ''), p.x, p.y + 20);
+    const hasEmote = Date.now() < (p.emoteUntil || 0);
+    if (hasEmote) { ctx.font = '26px Arial'; ctx.textAlign = 'center'; ctx.fillText(EMOTES[p.emote], p.x, p.y - (wear.hat ? 94 : 72)); }
+    if (Date.now() < p.bubbleUntil) bubble(p.bubble, p.x, p.y - (wear.hat ? 98 : 78) - (hasEmote ? 32 : 0));
+  }
+  drawPops();
+  // איסוף מטבעות: כשהדמות שלי מגיעה אליהם
+  const mp = players[myId];
+  if (room === 'forest' && mp) {
+    for (const c of coins) {
+      const sent = pendingAt.get(c.id);
+      if (Math.hypot(mp.x - c.x, mp.y - c.y) < 26 && (!sent || now - sent > 1000)) {
+        pendingAt.set(c.id, now); socket.emit('collect', c.id);
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
